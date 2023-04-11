@@ -1,0 +1,8 @@
+LICENSE
+README.md
+pyproject.toml
+bthesis_transformer.egg-info/PKG-INFO
+bthesis_transformer.egg-info/SOURCES.txt
+bthesis_transformer.egg-info/dependency_links.txt
+bthesis_transformer.egg-info/requires.txt
+bthesis_transformer.egg-info/top_level.txt

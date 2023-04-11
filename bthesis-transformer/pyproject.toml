@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bthesis-transformer"
+version = "0.0.1"
+description = "Files for the bachelor project on Transformers for Natural Language Processing at the Vrije Universiteit Amsterdam by Ryan Ott"
+license = {text = "MIT"}
+authors = [
+    {name = "Ryan Ott", email = "ott.r21@gmail.com"},
+]
+readme = "README.md"
+dependencies = [
+    "torch",
+    "wget",
+]
+requires-python = ">=3.8"

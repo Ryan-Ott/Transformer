@@ -1,13 +1,20 @@
 import time
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
 
 class Model(nn.Module):
-    """A simple model that embeds the input sequences and applies max or average pooling."""
-    def __init__(self, vocab_size, embedding_dim=128, pooling='max'):
+    """A simple model that embeds the input sequences, applies max or average pooling and projects the embedding vectors down to the number of classes."""
+    def __init__(self, vocab_size, n_classes=2, embedding_dim=128, pooling='max'):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        # TODO: add self attention layer
+
         self.pooling = pooling
+        self.linear = nn.Linear(embedding_dim, n_classes, bias=True)  # should bias be True or False?
 
     def forward(self, x):  # x: (batch_size, seq_len)
         embedded = self.embedding(x)  # embedded: (batch_size, seq_len, embedding_dim)
@@ -18,9 +25,10 @@ class Model(nn.Module):
             pooled = torch.mean(embedded, dim=1)
         else:
             raise ValueError("Pooling must be set to 'max' or 'avg")
-
-        return pooled
-
+        
+        projected = self.linear(pooled)  # projected: (batch_size, n_classes) | project the embedding vectors down to the number of classes
+        
+        return projected
 
 def batch_by_instances(sequences, labels, batch_size=32, pad_token=0):
     """Create batches of a given number of instances and pad all instances within a batch to be the same length.
@@ -35,79 +43,69 @@ def batch_by_instances(sequences, labels, batch_size=32, pad_token=0):
     """
     batches_x, batches_y = [], []
 
-    n_batches = len(sequences) // batch_size
+    for i in range(0, len(sequences), batch_size):
+        batch_x = sequences[i:i + batch_size]
+        batch_y = labels[i:i + batch_size]
 
-    # Truncate to a multiple of batch_size
-    sequences = sequences[:n_batches * batch_size]
-    labels = labels[:n_batches * batch_size]
+        # Find the max length in the current batch
+        max_len = max(len(x) for x in batch_x)
 
-    for batch_idx in range(n_batches):
-        batch = sequences[batch_idx * batch_size: (batch_idx + 1) * batch_size]
-        max_len = max(len(x) for x in batch)
+        # Pad sequences in the current batch and convert them to tensors, then stack them into a single tensor per batch
+        padded_tensor_batch_x = torch.stack([torch.LongTensor(seq + [pad_token] * (max_len - len(seq))) for seq in batch_x])
 
-        for seq in batch:
-            seq += [pad_token] * (max_len - len(seq))
+        # Convert labels to tensors and stack these into a single tensor per batch
+        tensor_batch_y = torch.LongTensor(batch_y)
 
-        batches_x.append(batch)
-        batches_y.append(labels[batch_idx * batch_size: (batch_idx + 1) * batch_size])
+        batches_x.append(padded_tensor_batch_x)
+        batches_y.append(tensor_batch_y)
+
     return batches_x, batches_y
 
 
 def batch_by_tokens(sequences, labels, max_tokens=4096, pad_token=0):
-    """Split the input sequences into batches of a given number of tokens and pad all sequences within a batch to be the same length.
-
-    Args:
-        sequences (List): Input sequences
-        labels (List): Corresponding labels
-        max_tokens (int, optional): Number of tokens that a batch should not exceed. Defaults to 4096.
-
-    Returns:
-        tuple: Batches of input sequences and their corresponding labels.
-    """    
+    def pad_and_convert_to_tensor(batch_x, batch_y, max_seq_len):
+        padded_batch_x = [seq + [pad_token] * (max_seq_len - len(seq)) for seq in batch_x]
+        tensor_batch_x = torch.LongTensor(padded_batch_x)
+        tensor_batch_y = torch.LongTensor(batch_y)
+        return tensor_batch_x, tensor_batch_y
+    
     batches_x, batches_y = [], []
     batch_x, batch_y = [], []
     max_seq_len = 0
 
     for seq, label in zip(sequences, labels):
-        # if adding one more sequence would cause the batch to exceed max_tokens (including padding) close off the batch
-        if (len(batch_x) + 1) * max(max_seq_len, len(seq)) > max_tokens:
-            # Pad the batch
-            for seq in batch_x:
-                seq += [pad_token] * (max_seq_len - len(seq))
+        seq = seq[:max_tokens] if len(seq) > max_tokens else seq
 
-            batches_x.append(batch_x)
-            batches_y.append(batch_y)
-            batch_x, batch_y = [], []
-            max_seq_len = 0
-        
-        batch_x.append(seq)
-        batch_y.append(label)
-        max_seq_len = max(max_seq_len, len(seq))
-    
-    # Pad the last batch (unclosed) batch
-    for seq in batch_x:
-        seq += [pad_token] * (max_seq_len - len(seq))
-    
-    batches_x.append(batch_x)
-    batches_y.append(batch_y)
+        if (len(batch_x) + 1) * max(max_seq_len, len(seq)) > max_tokens:
+            tensor_batch_x, tensor_batch_y = pad_and_convert_to_tensor(batch_x, batch_y, max_seq_len)
+            batches_x.append(tensor_batch_x)
+            batches_y.append(tensor_batch_y)
+            batch_x, batch_y = [seq], [label]
+            max_seq_len = len(seq)
+        else:
+            batch_x.append(seq)
+            batch_y.append(label)
+            max_seq_len = max(max_seq_len, len(seq))
+
+    tensor_batch_x, tensor_batch_y = pad_and_convert_to_tensor(batch_x, batch_y, max_seq_len)
+    batches_x.append(tensor_batch_x)
+    batches_y.append(tensor_batch_y)
+
     return batches_x, batches_y
 
 
-def train(model, x_train, y_train, epochs=10, alpha=0.001):
+def train(model, batches_x, batches_y, epochs=10, alpha=0.01):
     optimizer = torch.optim.Adam(model.parameters(), lr=alpha)
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss()  # check documentation for order of batch dimension
 
-    print(f'\nTraining with {model.pooling} pooling')
+    print(f"Training with {model.pooling} pooling")
     start_time = time.time()
 
     for epoch in range(epochs):
-        for x, y in zip(x_train, y_train):
-            x = torch.tensor(x, dtype=torch.long)
-            y = torch.tensor(y, dtype=torch.long)
-
+        for batch_x, batch_y in zip(batches_x, batches_y):
             optimizer.zero_grad()
-            y_pred = model(x)
-            loss = loss_fn(y_pred, y)
+            y_pred = model(batch_x)
+            loss = loss_fn(y_pred, batch_y)
             loss.backward()
             optimizer.step()
         print(f'Epoch {epoch + 1} Loss: {loss.item():.2f}')
@@ -116,15 +114,12 @@ def train(model, x_train, y_train, epochs=10, alpha=0.001):
     print(f'Training took {int(mins)}:{int(secs):02d} minutes')
 
 
-def evaluate(model, x_val, y_val):
+def evaluate(model, batches_x, batches_y):
     correct = 0
     total = 0
 
     with torch.no_grad():
-        for x, y in zip(x_val, y_val):
-            x = torch.tensor(x, dtype=torch.long)
-            y = torch.tensor(y, dtype=torch.long)
-
+        for x, y in zip(batches_x, batches_y):
             y_pred = model(x)
             _, predicted = torch.max(y_pred.data, 1)
             total += y.size(0)
@@ -132,3 +127,34 @@ def evaluate(model, x_val, y_val):
     
     print(f'Accuracy of the {model.pooling} pooling model: {correct / total * 100:.2f}%')
 
+
+#-------------------------------helper functions-------------------------------#
+
+def visualize_weights(weight_matrix):
+    """Visualize the attention weights as a heatmap."""
+    plt.figure(figsize=(10, 10))
+    sns.heatmap(weight_matrix, cmap='coolwarm', center=0)
+    plt.title('Attention weights')
+    plt.xlabel('Input sequence')
+    plt.ylabel('Output sequence')
+    plt.show()
+
+
+def visualize_embeddings(embedding_matrix, num_points=500, perplexity=30):
+    tsne = TSNE(n_components=2, perplexity=perplexity)
+    points = tsne.fit_transform(embedding_matrix[:num_points])
+
+    plt.scatter(points[:, 0], points[:, 1])
+    plt.show()
+
+def get_tensor_memory(tensor):
+    return tensor.element_size() * tensor.nelement()
+
+
+def get_memory_usage_and_token_count_for_batches(batches_x, batches_y):
+    memory_usages_and_token_counts = []
+    for batch_x, batch_y in zip(batches_x, batches_y):
+        memory_usage = get_tensor_memory(batch_x) + get_tensor_memory(batch_y)
+        token_count = batch_x.numel()  # Count all elements, including padding tokens
+        memory_usages_and_token_counts.append((memory_usage, token_count))
+    return memory_usages_and_token_counts

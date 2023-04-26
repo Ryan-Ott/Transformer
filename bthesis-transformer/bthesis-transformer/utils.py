@@ -6,29 +6,89 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
-class Model(nn.Module):
-    """A simple model that embeds the input sequences, applies max or average pooling and projects the embedding vectors down to the number of classes."""
-    def __init__(self, vocab_size, n_classes=2, embedding_dim=128, pooling='max'):
+class SelfAttention(nn.Module):
+    """Multi-head self-attention layer with and weight normalisation."""
+    def __init__(self, emb, heads=4, mask=False):  # emb is the dimensionality of the embedding space (len of the input vector)
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        # TODO: add self attention layer
+        
+        assert emb % heads == 0  # embedding dimension must be divisible by number of heads
+        self.k, self.heads = emb, heads
 
-        self.pooling = pooling
-        self.linear = nn.Linear(embedding_dim, n_classes, bias=True)  # should bias be True or False?
+        # computing queries, keys and values in parallel for all heads
+        self.toQueries = nn.Linear(emb, emb, bias=False)  # bias=False so that we can use this as a simple projection
+        self.toKeys = nn.Linear(emb, emb, bias=False)
+        self.toValues = nn.Linear(emb, emb, bias=False)
+
+        self.unifyHeads = nn.Linear(emb, emb)  # W0 matrix
+    
+    def forward(self, x):
+        b, t, k = x.size()
+        h = self.heads
+
+        queries = self.toQueries(x)
+        keys = self.toKeys(x)
+        values = self.toValues(x)
+
+        s = k // h  # s is the dimensionality of the embedding space per head
+        
+        # split the embedding space into multiple heads
+        queries = queries.view(b, t, h, s)
+        keys = keys.view(b, t, h, s)
+        values = values.view(b, t, h, s)
+
+        # fold heads into batch dimension so that we can bmm all heads at once
+        queries = queries.transpose(1, 2).contiguous().view(b * h, t, s)  # first swapping the time and head dimensions, then folding the heads into the batch dimension
+        keys = keys.transpose(1, 2).contiguous().view(b * h, t, s)
+        values = values.transpose(1, 2).contiguous().view(b * h, t, s)
+
+        # compute raw attention scores
+        dot_raw = torch.bmm(queries, keys.transpose(1,2))  # (b * h, t, t)
+
+        # scale the raw attention scores
+        dot = dot_raw / (k ** (1/2))  # (b * h, t, t)
+
+        # row-wise softmax to get normalised weights
+        dot = F.softmax(dot, dim=2)  # (b * h, t, t)
+
+        # apply the attention weights to the values
+        out = torch.bmm(dot, values).view(b, h, t, s)
+
+        # swap head and time dimensions back again so that we can concatenate the heads
+        out = out.transpose(1, 2).contiguous().view(b, t, h * s)
+
+        # concatenate the heads and return
+        return self.unifyHeads(out)
+
+
+class Transformer(nn.Module):
+    def __init__(self, vocab_size, n_classes=2, emb_dim=128, pooling='avg', heads=4, mask=False):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, emb_dim)
+
+        self.attention = SelfAttention(emb_dim, heads)
+
+        if pooling == 'max':
+            self.pooling = nn.AdaptiveMaxPool1d(1)
+        elif pooling == 'avg':
+            self.pooling = nn.AdaptiveAvgPool1d(1)
+        else:
+            raise ValueError("Pooling must be set to 'max' or 'avg")
+        
+        self.linear = nn.Linear(emb_dim, n_classes, bias=True)
 
     def forward(self, x):  # x: (batch_size, seq_len)
         embedded = self.embedding(x)  # embedded: (batch_size, seq_len, embedding_dim)
 
-        if self.pooling == 'max':
-            pooled = torch.max(embedded, dim=1)[0]  # pooled: (batch_size, embedding_dim)
-        elif self.pooling == 'avg':
-            pooled = torch.mean(embedded, dim=1)
-        else:
-            raise ValueError("Pooling must be set to 'max' or 'avg")
+        attended = self.attention(embedded)  # attended: (batch_size, seq_len, embedding_dim)
+        attended = attended.permute(0, 2, 1)  # swap the position of the embedding and time dimension so that we can apply the pooling layer
+
+        pooled = self.pooling(attended)  # pooled: (batch_size, embedding_dim, 1)
+        pooled = pooled.view(pooled.size(0), -1)  # pooled: (batch_size, embedding_dim)
         
         projected = self.linear(pooled)  # projected: (batch_size, n_classes) | project the embedding vectors down to the number of classes
         
         return projected
+
 
 def batch_by_instances(sequences, labels, batch_size=32, pad_token=0):
     """Create batches of a given number of instances and pad all instances within a batch to be the same length.
@@ -96,7 +156,7 @@ def batch_by_tokens(sequences, labels, max_tokens=4096, pad_token=0):
 
 def train(model, batches_x, batches_y, epochs=10, alpha=0.01):
     optimizer = torch.optim.Adam(model.parameters(), lr=alpha)
-    loss_fn = nn.CrossEntropyLoss()  # check documentation for order of batch dimension
+    loss_fn = nn.CrossEntropyLoss()
 
     print(f"Training with {model.pooling} pooling")
     start_time = time.time()
@@ -128,33 +188,40 @@ def evaluate(model, batches_x, batches_y):
     print(f'Accuracy of the {model.pooling} pooling model: {correct / total * 100:.2f}%')
 
 
-#-------------------------------helper functions-------------------------------#
+#-------------------------------verbose functions-------------------------------#
 
-def visualize_weights(weight_matrix):
+def visualize_weights(weight_matrix, title):
     """Visualize the attention weights as a heatmap."""
     plt.figure(figsize=(10, 10))
     sns.heatmap(weight_matrix, cmap='coolwarm', center=0)
-    plt.title('Attention weights')
+    plt.title(title)
     plt.xlabel('Input sequence')
     plt.ylabel('Output sequence')
     plt.show()
 
 
-def visualize_embeddings(embedding_matrix, num_points=500, perplexity=30):
+def visualize_embeddings(embedding_matrix, title, num_points=500, perplexity=30):
     tsne = TSNE(n_components=2, perplexity=perplexity)
     points = tsne.fit_transform(embedding_matrix[:num_points])
 
     plt.scatter(points[:, 0], points[:, 1])
+    plt.title(title)
+    plt.xlabel('t-SNE dimension 1')
+    plt.ylabel('t-SNE dimension 2')
     plt.show()
 
-def get_tensor_memory(tensor):
-    return tensor.element_size() * tensor.nelement()
 
-
-def get_memory_usage_and_token_count_for_batches(batches_x, batches_y):
-    memory_usages_and_token_counts = []
-    for batch_x, batch_y in zip(batches_x, batches_y):
-        memory_usage = get_tensor_memory(batch_x) + get_tensor_memory(batch_y)
+def get_memory_and_tokens_per_batch(batches_x):
+    """Return a dictionary with the memory usage and token count per batch."""
+    memory_tokens_per_batch = {}
+    for i, batch_x in enumerate(batches_x):
+        memory_usage = batch_x.element_size() * batch_x.nelement()
         token_count = batch_x.numel()  # Count all elements, including padding tokens
-        memory_usages_and_token_counts.append((memory_usage, token_count))
-    return memory_usages_and_token_counts
+        memory_tokens_per_batch.setdefault(i, (memory_usage, token_count))
+    return memory_tokens_per_batch
+
+
+def get_memory_usage_deviation(memory_tokens_per_batch):
+    """Calculate the deviation between the smallest and largest memory usage as a percentage"""
+    memory_usage = [memory for memory, _ in memory_tokens_per_batch.values()]
+    return (max(memory_usage) - min(memory_usage)) / min(memory_usage) * 100

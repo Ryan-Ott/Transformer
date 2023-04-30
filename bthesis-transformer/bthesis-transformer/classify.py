@@ -42,22 +42,15 @@ def main(model, bb="tokens", epochs=EPOCHS, lr=LEARNING_RATE, emb_dim=EMBEDDING_
 
     # Create instances of the models
     if model == "base":
-        model_max = base.Transformer(len(i2w), n_classes, emb_dim, pooling='max')
-        model_avg = base.Transformer(len(i2w), n_classes, emb_dim, pooling='avg')
+        model = base.Transformer(len(i2w), n_classes, emb_dim, pooling='avg')
     elif model == "simple":
-        model_max = simple.Transformer(len(i2w), n_classes, emb_dim, pooling="max")
-        model_avg = simple.Transformer(len(i2w), n_classes, emb_dim, pooling="avg")
+        model = simple.Transformer(len(i2w), n_classes, emb_dim, pooling="avg")
     else:
-        model_max = multihead.Transformer(len(i2w), n_classes, emb_dim, pooling="max", heads=heads)
-        model_avg = multihead.Transformer(len(i2w), n_classes, emb_dim, pooling="avg", heads=heads)
-
-    # Train and evaluate the max pool model
-    utils.train(model_max, x_train_batches, y_train_batches, epochs, lr)
-    utils.evaluate(model_max, x_val_batches, y_val_batches)
+        model = multihead.Transformer(len(i2w), n_classes, emb_dim, pooling="avg", heads=heads)
     
-    # Train and evaluate the avg pool model
-    utils.train(model_avg, x_train_batches, y_train_batches, epochs, lr)
-    utils.evaluate(model_avg, x_val_batches, y_val_batches)
+    # Train and evaluate the model
+    utils.train(model, x_train_batches, y_train_batches, epochs, lr)
+    utils.evaluate(model, x_val_batches, y_val_batches)
 
     if v:
         if bb=="tokens":  # Print the memory usage and number of tokens for each batch (useful when debugging batch_by_tokens)
@@ -69,16 +62,12 @@ def main(model, bb="tokens", epochs=EPOCHS, lr=LEARNING_RATE, emb_dim=EMBEDDING_
             print(f"Memory deviation between batches: {utils.get_memory_usage_deviation(memory_usages):.2f}%")
 
         # Visualize the weights
-        weight_matrix_max = model_max.linear.weight.data.numpy()
-        weight_matrix_avg = model_avg.linear.weight.data.numpy()
-        utils.visualize_weights(weight_matrix_max, title="Max Pooling Weights")
-        utils.visualize_weights(weight_matrix_avg, title="Avg Pooling Weights")
+        weight_matrix = model.linear.weight.data.numpy()
+        utils.visualize_weights(weight_matrix, title="Avg Pooling Weights")
 
         # Visualize the embeddings
-        embedding_matrix_max = model_max.embedding.weight.data.numpy()
-        embedding_matrix_avg = model_avg.embedding.weight.data.numpy()
-        utils.visualize_embeddings(embedding_matrix_max, title="Max Pooling Embeddings")
-        utils.visualize_embeddings(embedding_matrix_avg, title="Avg Pooling Embeddings")
+        embedding_matrix = model.embedding.weight.data.numpy()
+        utils.visualize_embeddings(embedding_matrix, title="Avg Pooling Embeddings")
 
 def sort(x, y):
     x, y = zip(*sorted(zip(x, y), key=lambda x: len(x[0])))

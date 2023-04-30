@@ -1,6 +1,6 @@
 import time
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -122,7 +122,7 @@ def batch_by_instances(sequences, labels, batch_size=32, pad_token=0):
     return batches_x, batches_y
 
 
-def batch_by_tokens(sequences, labels, max_tokens=4096, pad_token=0):
+def batch_by_tokens(sequences, labels, max_tokens=8192, pad_token=0):
     def pad_and_convert_to_tensor(batch_x, batch_y, max_seq_len):
         padded_batch_x = [seq + [pad_token] * (max_seq_len - len(seq)) for seq in batch_x]
         tensor_batch_x = torch.LongTensor(padded_batch_x)
@@ -154,7 +154,7 @@ def batch_by_tokens(sequences, labels, max_tokens=4096, pad_token=0):
     return batches_x, batches_y
 
 
-def train(model, batches_x, batches_y, epochs=10, alpha=0.01):
+def train(model, batches_x, batches_y, epochs, alpha):
     optimizer = torch.optim.Adam(model.parameters(), lr=alpha)
     loss_fn = nn.CrossEntropyLoss()
 

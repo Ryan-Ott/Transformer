@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import base
+import simple
+import multihead
 import data_rnn
 import fire
 import utils
@@ -7,36 +10,46 @@ import utils
 # Hyperparameters
 EPOCHS = 3
 LEARNING_RATE = 0.001
-EMBEDDING_DIM = 128
+EMBEDDING_DIM = 256
 
+# TODO: base model, simple self attention, multi-head self attention
 
-def main(bb, epochs=EPOCHS, lr=LEARNING_RATE, emb_dim=EMBEDDING_DIM, v=False):
-    """Load the IMDb dataset, train a model with max pooling and other with average pooling, and evaluate them.
+def main(model, bb="tokens", epochs=EPOCHS, lr=LEARNING_RATE, emb_dim=EMBEDDING_DIM, heads=4, v=False):
+    """Load the IMDb dataset, train a classification model and evaluate the accuracy.
 
     Args:
-        bb (str): batch_by - Method for batching the data. Can be 'instances' or 'tokens'.
-        epochs (int, optional): Number of iterations during training. Defaults to 10.
-        lr (float, o`ptional): Step size for training. Defaults to 0.01.
-        emb_dim (int, optional): Dimensions of the embedding vector. Defaults to 128.
+        model (str): Model to use. Can be 'base', 'simple' or 'multihead'.
+        bb (str): batch_by - Method for batching the data. Can be 'instances' or 'tokens'. Defaults to 'tokens'.
+        epochs (int, optional): Number of iterations during training. Defaults to 3.
+        lr (float, optional): Step size for training. Defaults to 0.001.
+        emb_dim (int, optional): Dimensions of the embedding vector. Defaults to 512.
+        heads (int, optional): Number of heads in the multi-head attention layer. Defaults to 4.
         v (bool, optional): Verbose. Defaults to False.
     """
     # Load the IMDb dataset
     (x_train, y_train), (x_val, y_val), (i2w, w2i), n_classes = data_rnn.load_imdb(final=False)
     PAD = w2i['.pad']  # Index of padding token (its 0)
 
-    # Sort the training data by length
-    x_train, y_train = zip(*sorted(zip(x_train, y_train), key=lambda x: len(x[0])))
+    # Sort the training data by length (shortest to longest)
+    x_train, y_train = sort(x_train, y_train)
 
     # Create batches
     x_train_batches, y_train_batches, x_val_batches, y_val_batches = batchify(bb, x_train, y_train, x_val, y_val, PAD)
 
     # print the hyperparameters
-    print(f"\nHyperparameters: \nAlpha: {lr}\nEpochs: {epochs}")
+    print(f"\nModel: {model}\nEpochs: {epochs}\nAlpha: {lr}\nEmbedding dimension: {emb_dim}\nHeads: {heads}\nBatch by: {bb}")
     print("------------------------------------")
 
     # Create instances of the models
-    model_max = utils.Transformer(len(i2w), n_classes, emb_dim, pooling='max')
-    model_avg = utils.Transformer(len(i2w), n_classes, emb_dim, pooling='avg')
+    if model == "base":
+        model_max = base.Transformer(len(i2w), n_classes, emb_dim, pooling='max')
+        model_avg = base.Transformer(len(i2w), n_classes, emb_dim, pooling='avg')
+    elif model == "simple":
+        model_max = simple.Transformer(len(i2w), n_classes, emb_dim, pooling="max")
+        model_avg = simple.Transformer(len(i2w), n_classes, emb_dim, pooling="avg")
+    else:
+        model_max = multihead.Transformer(len(i2w), n_classes, emb_dim, pooling="max", heads=heads)
+        model_avg = multihead.Transformer(len(i2w), n_classes, emb_dim, pooling="avg", heads=heads)
 
     # Train and evaluate the max pool model
     utils.train(model_max, x_train_batches, y_train_batches, epochs, lr)
@@ -67,6 +80,10 @@ def main(bb, epochs=EPOCHS, lr=LEARNING_RATE, emb_dim=EMBEDDING_DIM, v=False):
         utils.visualize_embeddings(embedding_matrix_max, title="Max Pooling Embeddings")
         utils.visualize_embeddings(embedding_matrix_avg, title="Avg Pooling Embeddings")
 
+def sort(x, y):
+    x, y = zip(*sorted(zip(x, y), key=lambda x: len(x[0])))
+    return x, y
+
 
 def batchify(batch_by, x_train, y_train, x_val, y_val, PAD):
     """Create batches of the training and validation data."""
@@ -84,3 +101,4 @@ def batchify(batch_by, x_train, y_train, x_val, y_val, PAD):
 
 if __name__ == '__main__':
     fire.Fire(main)
+    # main(model="base", bb="tokens", epochs=3, lr=0.001, emb_dim=256, heads=4, v=False)

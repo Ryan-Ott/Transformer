@@ -12,17 +12,17 @@ EPOCHS = 3
 LEARNING_RATE = 0.001
 EMBEDDING_DIM = 256
 
-# TODO: base model, simple self attention, multi-head self attention
 
-def main(model, bb="tokens", epochs=EPOCHS, lr=LEARNING_RATE, emb_dim=EMBEDDING_DIM, heads=4, v=False):
+def main(model, bb="tokens", epochs=EPOCHS, lr=LEARNING_RATE, emb_dim=EMBEDDING_DIM, pool="avg", heads=4, v=False):
     """Load the IMDb dataset, train a classification model and evaluate the accuracy.
 
     Args:
         model (str): Model to use. Can be 'base', 'simple' or 'multihead'.
-        bb (str): batch_by - Method for batching the data. Can be 'instances' or 'tokens'. Defaults to 'tokens'.
+        bb (str, optional): batch_by - Method for batching the data. Can be 'instances' or 'tokens'. Defaults to 'tokens'.
         epochs (int, optional): Number of iterations during training. Defaults to 3.
         lr (float, optional): Step size for training. Defaults to 0.001.
         emb_dim (int, optional): Dimensions of the embedding vector. Defaults to 512.
+        pool (str, optional): Pooling method. Can be 'avg' or 'max'. Defaults to 'avg'.
         heads (int, optional): Number of heads in the multi-head attention layer. Defaults to 4.
         v (bool, optional): Verbose. Defaults to False.
     """
@@ -36,17 +36,20 @@ def main(model, bb="tokens", epochs=EPOCHS, lr=LEARNING_RATE, emb_dim=EMBEDDING_
     # Create batches
     x_train_batches, y_train_batches, x_val_batches, y_val_batches = batchify(bb, x_train, y_train, x_val, y_val, PAD)
 
-    # print the hyperparameters
-    print(f"\nModel: {model}\nEpochs: {epochs}\nAlpha: {lr}\nEmbedding dimension: {emb_dim}\nHeads: {heads}\nBatch by: {bb}")
-    print("------------------------------------")
-
     # Create instances of the models
+    name = model
     if model == "base":
-        model = base.Transformer(len(i2w), n_classes, emb_dim, pooling='avg')
+        model = base.Transformer(len(i2w), n_classes, emb_dim, pool)
     elif model == "simple":
-        model = simple.Transformer(len(i2w), n_classes, emb_dim, pooling="avg")
+        model = simple.Transformer(len(i2w), n_classes, emb_dim, pool)
+    elif model == "multi":
+        model = multihead.Transformer(len(i2w), n_classes, emb_dim, pool, heads)
     else:
-        model = multihead.Transformer(len(i2w), n_classes, emb_dim, pooling="avg", heads=heads)
+        raise ValueError("model must be set to 'base', 'simple' or 'multi'")
+
+    # print the hyperparameters
+    print(f"\nModel: {name}\nEpochs: {epochs}\nAlpha: {lr}\nEmbedding dimension: {emb_dim}\nHeads: {heads}\nPool: {model.pooling}\nBatch by: {bb}")
+    print("------------------------------------------------------------------------")
     
     # Train and evaluate the model
     utils.train(model, x_train_batches, y_train_batches, epochs, lr)
@@ -90,4 +93,4 @@ def batchify(batch_by, x_train, y_train, x_val, y_val, PAD):
 
 if __name__ == '__main__':
     fire.Fire(main)
-    # main(model="base", bb="tokens", epochs=3, lr=0.001, emb_dim=256, heads=4, v=False)
+    # main(model="base", bb="tokens", epochs=1, lr=0.001, emb_dim=256, heads=4, v=False)

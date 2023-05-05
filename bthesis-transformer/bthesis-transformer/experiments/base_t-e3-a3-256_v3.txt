@@ -1,15 +1,15 @@
-max_tokens=32768
+
 Model: base
 Epochs: 3
 Alpha: 0.001
-Embedding dimension: 512
-Heads: 4
+Embedding dimension: 256
+Heads: 2
 Pool: AdaptiveAvgPool1d(output_size=1)
 Batch by: tokens
 ------------------------------------------------------------------------
 Training with AdaptiveAvgPool1d(output_size=1) pooling
-Epoch 1 Loss: 2.06
-Epoch 2 Loss: 0.38
-Epoch 3 Loss: 0.33
-Training took 2:27 minutes
-Accuracy of the AdaptiveAvgPool1d(output_size=1) pooling model: 85.84%
+Epoch 1 Loss: 0.41
+Epoch 2 Loss: 0.26
+Epoch 3 Loss: 0.11
+Training took 2:02 minutes
+Accuracy of the AdaptiveAvgPool1d(output_size=1) pooling model: 86.62%

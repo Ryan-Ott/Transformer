@@ -4,14 +4,14 @@ import torch.nn.functional as F
 
 class SelfAttention(nn.Module):
     """Simple self-attention layer with and weight normalisation."""
-    def __init__(self, emb):
+    def __init__(self, k):
         super().__init__()
         
-        self.k = emb
+        self.k = k
 
-        self.toQueries = nn.Linear(emb, emb, bias=False)  # bias=False so that we can use this as a simple projection
-        self.toKeys = nn.Linear(emb, emb, bias=False)
-        self.toValues = nn.Linear(emb, emb, bias=False)
+        self.toQueries = nn.Linear(k, k, bias=False)  # bias=False so that we can use this as a simple projection
+        self.toKeys = nn.Linear(k, k, bias=False)
+        self.toValues = nn.Linear(k, k, bias=False)
     
     def forward(self, x):
         b, t, k = x.size()
@@ -34,20 +34,20 @@ class SelfAttention(nn.Module):
  
 
 class Transformer(nn.Module):
-    def __init__(self, vocab_size, n_classes=2, emb_dim=512, pooling='avg'):
+    def __init__(self, vocab_size, n_classes=2, k=512, pool='avg'):
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, emb_dim)
+        self.embedding = nn.Embedding(vocab_size, k)
 
-        self.attention = SelfAttention(emb_dim)
+        self.attention = SelfAttention(k)
 
-        if pooling == 'max':
+        if pool == 'max':
             self.pooling = nn.AdaptiveMaxPool1d(1)
-        elif pooling == 'avg':
+        elif pool == 'avg':
             self.pooling = nn.AdaptiveAvgPool1d(1)
         else:
             raise ValueError("Pooling must be set to 'max' or 'avg")
         
-        self.linear = nn.Linear(emb_dim, n_classes, bias=True)
+        self.linear = nn.Linear(k, n_classes, bias=True)
 
     def forward(self, x):  # x: (batch_size, seq_len)
         embedded = self.embedding(x)  # embedded: (batch_size, seq_len, embedding_dim)

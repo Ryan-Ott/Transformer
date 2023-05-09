@@ -1,21 +1,22 @@
+import math
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 class SelfAttention(nn.Module):
     """Multi-head self-attention layer with and weight normalisation."""
-    def __init__(self, emb, heads=4):  # emb is the dimensionality of the embedding space (len of the input vector)
+    def __init__(self, k, heads=4):  # k is the dimensionality of the embedding space (len of the input vector)
         super().__init__()
         
-        assert emb % heads == 0  # embedding dimension must be divisible by number of heads
-        self.k, self.heads = emb, heads
+        assert k % heads == 0  # embedding dimension must be divisible by number of heads
+        self.k, self.heads = k, heads
 
         # computing queries, keys and values in parallel for all heads
-        self.toQueries = nn.Linear(emb, emb, bias=False)  # bias=False so that we can use this as a simple projection
-        self.toKeys = nn.Linear(emb, emb, bias=False)
-        self.toValues = nn.Linear(emb, emb, bias=False)
+        self.toQueries = nn.Linear(k, k, bias=False)  # bias=False so that we can use this as a simple projection
+        self.toKeys = nn.Linear(k, k, bias=False)
+        self.toValues = nn.Linear(k, k, bias=False)
 
-        self.unifyHeads = nn.Linear(emb, emb)  # W0 matrix
+        self.unifyHeads = nn.Linear(k, k)  # W0 matrix
     
     def forward(self, x):
         b, t, k = x.size()
@@ -57,30 +58,41 @@ class SelfAttention(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, vocab_size, n_classes=2, emb_dim=512, pooling='avg', heads=4):
+    def __init__(self, vocab_size, n_classes=2, k=512, pool='avg', heads=4):
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, emb_dim)
+        self.embedding = nn.Embedding(vocab_size, k)  # token embedding
+        
+        self.encoding = self.encode(k)  # positional encoding
 
-        self.attention = SelfAttention(emb_dim, heads)
+        self.attention = SelfAttention(k, heads)
 
-        if pooling == 'max':
+        if pool == 'max':
             self.pooling = nn.AdaptiveMaxPool1d(1)
-        elif pooling == 'avg':
+        elif pool == 'avg':
             self.pooling = nn.AdaptiveAvgPool1d(1)
         else:
             raise ValueError("Pooling must be set to 'max' or 'avg")
         
-        self.linear = nn.Linear(emb_dim, n_classes, bias=True)
+        self.linear = nn.Linear(k, n_classes, bias=True)
 
     def forward(self, x):  # x: (batch_size, seq_len)
         embedded = self.embedding(x)  # embedded: (batch_size, seq_len, embedding_dim)
+        encoded = embedded + self.encoding[:embedded.size(1), :].unsqueeze(0)  # encoded: (batch_size, seq_len, embedding_dim)
 
-        attended = self.attention(embedded)  # attended: (batch_size, seq_len, embedding_dim)
+        attended = self.attention(encoded)  # attended: (batch_size, seq_len, embedding_dim)
         attended = attended.permute(0, 2, 1)  # swap the position of the embedding and time dimension so that we can apply the pooling layer
 
         pooled = self.pooling(attended)  # pooled: (batch_size, embedding_dim, 1)
         pooled = pooled.view(pooled.size(0), -1)  # pooled: (batch_size, embedding_dim)
         
-        projected = self.linear(pooled)  # projected: (batch_size, n_classes) | project the embedding vectors down to the number of classes
-        
-        return projected
+        return self.linear(pooled)  # projected: (batch_size, n_classes) | project the embedding vectors down to the number of classes
+
+    def encode(self, k, max_len=10000):
+        """Computes positional encoding for a sequence of length max_len and dimensionality k. Based on the formula from the Attention is All You Need paper."""
+        pos = torch.arange(0, max_len).unsqueeze(1)  # pos: (max_len, 1)
+        dim = torch.exp(torch.arange(0, k, 2) * (-math.log(10000.0) / k))  # dim: (k/2)
+        enc = torch.zeros(max_len, k)  # enc: (max_len, k)
+        enc[:, 0::2] = torch.sin(pos * dim)  # filling the even columns of the embedding matrix with sin(pos * dim)
+        enc[:, 1::2] = torch.cos(pos * dim)  # filling the odd columns of the embedding matrix with cos(pos * dim)
+
+        return enc

@@ -4,18 +4,18 @@ class Transformer(nn.Module):
     """The base classification model consisting of an embedding layer, one global pooling operation (max or avg)
     and a linear projection from the embedding dimension down to the number of classes."""
 
-    def __init__(self, vocab_size, n_classes=2, emb_dim=512, pooling='avg'):
+    def __init__(self, vocab_size, n_classes=2, k=512, pool='avg'):
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, emb_dim)
+        self.embedding = nn.Embedding(vocab_size, k)
 
-        if pooling == 'max':
+        if pool == 'max':
             self.pooling = nn.AdaptiveMaxPool1d(1)
-        elif pooling == 'avg':
+        elif pool == 'avg':
             self.pooling = nn.AdaptiveAvgPool1d(1)
         else:
             raise ValueError("Pooling must be set to 'max' or 'avg")
         
-        self.linear = nn.Linear(emb_dim, n_classes, bias=True)
+        self.linear = nn.Linear(k, n_classes, bias=True)
 
     def forward(self, x):  # x: (batch_size, seq_len)
         embedded = self.embedding(x)  # embedded: (batch_size, seq_len, embedding_dim)

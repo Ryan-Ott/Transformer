@@ -1,0 +1,17 @@
+
+Model: simple
+Epochs: 5
+Alpha: 0.001
+Embedding dimension: 128
+Heads: 4
+Pool: AdaptiveAvgPool1d(output_size=1)
+Batch by: tokens
+------------------------------------------------------------------------
+Training with AdaptiveAvgPool1d(output_size=1) pooling
+Epoch 1 Loss: 1.19 - Learning rate: 0.000900
+Epoch 2 Loss: 1.49 - Learning rate: 0.000810
+Epoch 3 Loss: 0.90 - Learning rate: 0.000729
+Epoch 4 Loss: 0.24 - Learning rate: 0.000656
+Epoch 5 Loss: 0.20 - Learning rate: 0.000590
+Training took 6:59 minutes
+Accuracy of the AdaptiveAvgPool1d(output_size=1) pooling model: 85.66%

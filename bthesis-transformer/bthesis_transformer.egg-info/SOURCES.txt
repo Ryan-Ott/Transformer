@@ -1,6 +1,14 @@
 LICENSE
+MANIFEST.in
 README.md
-pyproject.toml
+setup.py
+bthesis-transformer/__init__.py
+bthesis-transformer/classify.py
+bthesis-transformer/data_rnn.py
+bthesis-transformer/generate.py
+bthesis-transformer/models.py
+bthesis-transformer/modules.py
+bthesis-transformer/utils.py
 bthesis_transformer.egg-info/PKG-INFO
 bthesis_transformer.egg-info/SOURCES.txt
 bthesis_transformer.egg-info/dependency_links.txt

@@ -7,7 +7,7 @@ import torch
 import utils
 
 
-def main(model, e=3, a=1e-3, k=256, h=4, p="avg", b="tokens", d=4, f=False, v=False, note="-"):
+def main(model, e=3, a=1e-3, k=512, h=4, p="avg", b="tokens", d=4, f=False, v=False, note="-"):
     """Load the IMDb dataset, train a classification model and evaluate the accuracy.
 
     Args:
@@ -56,7 +56,7 @@ def main(model, e=3, a=1e-3, k=256, h=4, p="avg", b="tokens", d=4, f=False, v=Fa
     model.to(device)
 
     # print the hyperparameters
-    print(f"\nNote: {note}\nModel: {name}\nEpochs: {epochs}\nAlpha: {alpha}\nEmbedding dimension: {emb_dim}\nHeads: {heads}\nPool: {model.pooling}\nBatch by: {batch_by}\nDevice: {device}")
+    print(f"\nNote: {note}\nModel: {name}\nEpochs: {epochs}\nAlpha: {alpha}\nEmbedding dimension: {emb_dim}\nHeads: {heads}\nPool: {model.pooling}\nBatch by: {batch_by}\nDepth: {depth}\nDevice: {device}")
     print("------------------------------------------------------------------------")
     
     # Train and evaluate the model

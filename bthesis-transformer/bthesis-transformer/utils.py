@@ -74,7 +74,7 @@ def batch_by_instances(device, sequences, labels, batch_size=32, pad_token=0):
     return batches_x, batches_y
 
 
-def batch_by_tokens(device, sequences, labels, max_tokens=2**14, pad_token=0):
+def batch_by_tokens(device, sequences, labels, max_tokens=2**15, pad_token=0):
     """Create batches of a maximum number of tokens so that each batch takes roughly the same amount of memory. Pad all instances within a batch to be the same length.
 
     Args:

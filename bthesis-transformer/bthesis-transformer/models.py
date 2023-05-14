@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 from torch.nn import functional as F
 import modules
@@ -5,21 +6,19 @@ import utils
 
 
 class ClfTransformer(nn.Module):
-    def __init__(self, vocab_size, k=256, n_classes=2, max_len=5000, heads=4, depth=4, dropout=0.1):
+    def __init__(self, vocab_size, k=256, n_classes=2, max_len=5000, heads=4, depth=4, device=torch.device('cpu')):
         super().__init__()
         self.tok_embedding = nn.Embedding(vocab_size, k)
 
-        self.pos_encoding = utils.pos_encode(k, max_len)
+        self.pos_encoding = utils.pos_encode(k, max_len).to(device)
         # self.pos_embedding = nn.Embedding(max_len, k)
 
-        # self.encoder = nn.ModuleList([modules.EncoderBlock(k, heads) for _ in range(depth)])
         blocks = []
         for _ in range(depth):
-            blocks.append(modules.EncoderBlock(k, heads))
-        
+            blocks.append(modules.EncoderBlock(k, heads))        
         self.encoder = nn.Sequential(*blocks)
 
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(0.1)
 
         self.pooling = nn.AdaptiveAvgPool1d(1)
 
@@ -43,11 +42,11 @@ class ClfTransformer(nn.Module):
 class MultiheadClf(nn.Module):
     """Multihead attention model with positional encoding."""
 
-    def __init__(self, vocab_size, n_classes=2, k=256, pool='avg', heads=4):
+    def __init__(self, vocab_size, n_classes=2, k=256, pool='avg', heads=4, device=torch.device('cpu')):
         super().__init__()
-        self.tok_embedding = nn.Embedding(vocab_size, k)  # token embedding
+        self.tok_embedding = nn.Embedding(vocab_size, k).to(device)  # token embedding
 
-        self.pos_encoding = utils.pos_encode(k)  # positional encoding
+        self.pos_encoding = utils.pos_encode(k).to(device)  # positional encoding
 
         self.attention = modules.MHSelfAttention(k, heads)
 

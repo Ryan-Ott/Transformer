@@ -12,7 +12,7 @@ LEARNING_RATE = 0.001
 EMBEDDING_DIM = 256
 
 
-def main(model, b="tokens", e=EPOCHS, a=LEARNING_RATE, k=EMBEDDING_DIM, p="avg", h=4, d=4, f=False, v=False):
+def main(model, b="tokens", e=EPOCHS, a=LEARNING_RATE, k=EMBEDDING_DIM, p="avg", h=4, d=4, f=False, v=False, note="-"):
     """Load the IMDb dataset, train a classification model and evaluate the accuracy.
 
     Args:
@@ -26,6 +26,7 @@ def main(model, b="tokens", e=EPOCHS, a=LEARNING_RATE, k=EMBEDDING_DIM, p="avg",
         d (str, optional): Depth of the transformer, so number of blocks. Defaults to 4.
         f (bool, optional): Use the final (testing) dataset. Defaults to False.
         v (bool, optional): Verbose. Prints batch information and produces graphs. Defaults to False.
+        note (str, optional): Note to add to the file.
     """
     batch_by, epochs, alpha, emb_dim, pool, heads, depth, final = b, e, a, k, p, h, d, f
     
@@ -52,15 +53,15 @@ def main(model, b="tokens", e=EPOCHS, a=LEARNING_RATE, k=EMBEDDING_DIM, p="avg",
     elif model == "simple":
         model = models.SimpleClf(len(i2w), n_classes, emb_dim, pool)
     elif model == "multi":
-        model = models.MultiheadClf(len(i2w), n_classes, emb_dim, pool, heads)
+        model = models.MultiheadClf(len(i2w), n_classes, emb_dim, pool, heads, device)
     elif model == "full":
-        model = models.ClfTransformer(len(i2w), emb_dim, n_classes, max_len, heads, depth)
+        model = models.ClfTransformer(len(i2w), emb_dim, n_classes, max_len, heads, depth, device)
     else:
-        raise ValueError("model must be set to 'base', 'simple' or 'multi'")
+        raise ValueError("model must be set to 'base', 'simple', 'multi' or 'full'")
     model.to(device)
 
     # print the hyperparameters
-    print(f"\nModel: {name}\nEpochs: {epochs}\nAlpha: {alpha}\nEmbedding dimension: {emb_dim}\nHeads: {heads}\nPool: {model.pooling}\nBatch by: {batch_by}\nDevice: {device}")
+    print(f"\nNote: {note}\nModel: {name}\nEpochs: {epochs}\nAlpha: {alpha}\nEmbedding dimension: {emb_dim}\nHeads: {heads}\nPool: {model.pooling}\nBatch by: {batch_by}\nDevice: {device}")
     print("------------------------------------------------------------------------")
     
     # Train and evaluate the model

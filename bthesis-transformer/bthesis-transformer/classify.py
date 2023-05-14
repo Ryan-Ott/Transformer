@@ -6,29 +6,24 @@ import models
 import torch
 import utils
 
-# Hyperparameters
-EPOCHS = 3
-LEARNING_RATE = 0.001
-EMBEDDING_DIM = 256
 
-
-def main(model, b="tokens", e=EPOCHS, a=LEARNING_RATE, k=EMBEDDING_DIM, p="avg", h=4, d=4, f=False, v=False, note="-"):
+def main(model, e=3, a=1e-3, k=256, h=4, p="avg", b="tokens", d=4, f=False, v=False, note="-"):
     """Load the IMDb dataset, train a classification model and evaluate the accuracy.
 
     Args:
         model (str): Model to use. Can be 'base', 'simple', 'multi' or 'full'.
-        b (str, optional): batch_by - Method for batching the data. Can be 'instances' or 'tokens'. Defaults to 'tokens'.
         e (int, optional): Number of iterations during training. Defaults to 3.
-        a (float, optional): Step size for training. Defaults to 0.001.
+        a (float, optional): Learning rate alpha. Defaults to 1e-3.
         k (int, optional): Dimensions of the embedding vector. Defaults to 512.
-        p (str, optional): Pooling method. Can be 'avg' or 'max'. Defaults to 'avg'.
         h (int, optional): Number of heads in the multi-head attention layer. Defaults to 4.
+        p (str, optional): Pooling method. Can be 'avg' or 'max'. Defaults to 'avg'.
+        b (str, optional): batch_by - Method for batching the data. Can be 'instances' or 'tokens'. Defaults to 'tokens'.
         d (str, optional): Depth of the transformer, so number of blocks. Defaults to 4.
         f (bool, optional): Use the final (testing) dataset. Defaults to False.
         v (bool, optional): Verbose. Prints batch information and produces graphs. Defaults to False.
         note (str, optional): Note to add to the file.
     """
-    batch_by, epochs, alpha, emb_dim, pool, heads, depth, final = b, e, a, k, p, h, d, f
+    epochs, alpha, emb_dim, heads, pool, batch_by, depth, final = int(e), float(a), int(k), int(h), str(p), str(b), int(d), bool(f)
     
     # Check if CUDA is available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,7 +65,6 @@ def main(model, b="tokens", e=EPOCHS, a=LEARNING_RATE, k=EMBEDDING_DIM, p="avg",
 
     if v:
         utils.batching_info(x_train_batches)
-        # TODO: produce graphs
 
 
 if __name__ == '__main__':

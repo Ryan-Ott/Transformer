@@ -14,7 +14,7 @@ def main(n=1000, a=1e-3, k=256, b=128, h=2, d=2, s=256, f=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load the enwik8 dataset
-    train_data, val_data, test_data = utils.enwik8("../data/enwik8.gz")
+    train_data, val_data, test_data = utils.enwik8("/enwik8.gz")
     train_data, test_data = (torch.cat([train_data, val_data], dim=0), test_data) if final else (train_data, val_data)
 
     # Create the model

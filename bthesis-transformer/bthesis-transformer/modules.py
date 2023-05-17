@@ -7,7 +7,7 @@ class MHSelfAttention(nn.Module):
     """Multi-head self-attention"""
 
     # k is the dimensionality of the embedding space (len of the input vector)
-    def __init__(self, k, heads=4, mask=False):
+    def __init__(self, k, heads, mask):
         super().__init__()
 
         assert k % heads == 0  # embedding dimension must be divisible by number of heads
@@ -106,23 +106,23 @@ class SimpleSelfAttention(nn.Module):
 
 
 class EncoderBlock(nn.Module):
-    def __init__(self, k, heads, p=0.1):
+    def __init__(self, k, heads, mask, p=0.1):
         super().__init__()
 
-        self.attention = MHSelfAttention(k, heads, mask=False)
+        self.attention = MHSelfAttention(k, heads, mask)
 
         self.norm1 = nn.LayerNorm(k)
         self.norm2 = nn.LayerNorm(k)
 
         self.ff = nn.Sequential(
             nn.Linear(k, 4 * k),
-            nn.ReLU(),
+            nn.ReLU(),  # TODO: check whether GELU is better
             # nn.GELU(),
             nn.Linear(4 * k, k))
         
         self.dropout = nn.Dropout(p)
 
-    def forward(self, x):
+    def forward(self, x):  # TODO: check whether swapping dropout and norm is better
         attended = self.attention(x)
         attended = self.dropout(attended)
         

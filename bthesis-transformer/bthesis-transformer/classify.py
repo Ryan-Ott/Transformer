@@ -2,7 +2,7 @@
 
 import data_rnn
 import fire
-import models
+import transformers
 import torch
 import utils
 
@@ -44,13 +44,13 @@ def main(model, e=3, a=1e-3, k=512, h=4, p="avg", b="tokens", d=4, f=False, v=Fa
     # Create instances of the models
     name = model
     if model == "base":
-        model = models.BaseClf(len(i2w), n_classes, emb_dim, pool)
+        model = transformers.BaseClf(len(i2w), n_classes, emb_dim, pool)
     elif model == "simple":
-        model = models.SimpleClf(len(i2w), n_classes, emb_dim, pool)
+        model = transformers.SimpleClf(len(i2w), n_classes, emb_dim, pool)
     elif model == "multi":
-        model = models.MultiheadClf(len(i2w), n_classes, emb_dim, pool, heads, device)
+        model = transformers.MultiheadClf(len(i2w), n_classes, emb_dim, pool, heads, device)
     elif model == "full":
-        model = models.ClfTransformer(len(i2w), emb_dim, n_classes, max_len, heads, depth, device)
+        model = transformers.ClfTransformer(len(i2w), n_classes, emb_dim, pool, max_len, heads, depth)
     else:
         raise ValueError("model must be set to 'base', 'simple', 'multi' or 'full'")
     model.to(device)

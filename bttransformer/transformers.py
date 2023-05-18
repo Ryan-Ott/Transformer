@@ -3,6 +3,43 @@ from torch import nn
 from . import utils, modules
 
 
+class SumTransformer(nn.Module):
+    """Text summarization transformer."""
+    def __init__(self, emb_dim, heads, token_count, seq_len, enc_hidden, enc_dropout, enc_depth, dec_hidden, dec_dropout, dec_depth):
+        # TODO - q: should there be a separate number of heads in the encoder and decoder?
+        # TODO - q: add layernorm here too?
+        # TODO: do positional encoding instead of embedding
+
+        super().__init__()
+
+        self.token_embedding = nn.Embedding(num_embeddings=token_count, embedding_dim=emb_dim)
+        self.pos_embedding = nn.Embedding(num_embeddings=seq_len, embedding_dim=emb_dim)
+
+        self.encoder = nn.Sequential(*[modules.EncoderBlock(emb_dim, heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)])
+        self.decoder = nn.Sequential(*[modules.DecoderBlock(emb_dim, heads, dec_hidden, dec_dropout) for _ in range(dec_depth)])
+
+        self.toProbs = nn.Linear(emb_dim, token_count)  # convert to probabilities over vocab
+
+
+    def forward(self, source, target):
+        tokens_source = self.token_embedding(source)
+        tokens_target = self.token_embedding(target)
+
+        b, t_s, k = tokens_source.size()
+        _, t_t, _ = tokens_target.size()
+
+        positions_source = self.pos_embedding(torch.arange(t_s, device=source.device))[None, :, :].expand(b, t_s, k)
+        positions_target = self.pos_embedding(torch.arange(t_t, device=target.device))[None, :, :].expand(b, t_t, k)
+
+        x = tokens_source + positions_source
+        context = self.encoder(x)
+
+        y = tokens_target + positions_target
+        y = self.decoder(y, context)
+
+        return self.toProbs(y)
+
+
 class GrtTransformer(nn.Module):
     """Auto-regressive text generation transformer."""
     def __init__(self, k, heads, depth, seq_len, token_count):
@@ -70,7 +107,7 @@ class ClfTransformer(nn.Module):
 
         self.norm = nn.LayerNorm(k)
         
-        self.linear = nn.Linear(k, n_classes, bias=True)
+        self.toProbs = nn.Linear(k, n_classes, bias=True)
     
     def forward(self, x):  # x: (batch_size, seq_len)
         tokens = self.tok_embedding(x)
@@ -85,7 +122,7 @@ class ClfTransformer(nn.Module):
 
         x = self.norm(x)
 
-        return self.linear(x)
+        return self.toProbs(x)
 
 
 class MultiheadClf(nn.Module):

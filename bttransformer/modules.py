@@ -25,7 +25,7 @@ class MHSelfAttention(nn.Module):
         b, t, e = x.size()
         h = self.heads
 
-        assert e == self.k  # sanity check
+        assert e == self.k,  f'Input embedding dimension ({e}) should match layer embedding dimension ({self.k})'
 
         queries = self.toQueries(x)
         keys = self.toKeys(x)
@@ -71,6 +71,52 @@ class MHSelfAttention(nn.Module):
         return self.unifyHeads(out)
 
 
+class MHCrossAttention(nn.Module):
+    """Multi-head cross-attention"""
+
+    def __init__(self, k, heads):
+        super().__init__()
+
+        assert k % heads == 0  # embedding dimension must be divisible by number of heads
+        self.k, self.heads = k, heads
+
+        self.toQueries = nn.Linear(k, k, bias=False)
+        self.toKeys = nn.Linear(k, k, bias=False)
+        self.toValues = nn.Linear(k, k, bias=False)
+
+        self.unifyHeads = nn.Linear(k, k)
+
+    def forward(self, x, context):
+        b, t, e = x.size()
+        _, t_context, _ = context.size()
+        h = self.heads
+
+        assert e == self.k, f'Input embedding dim ({e}) should match layer embedding dim ({self.k})'
+
+        queries = self.toQueries(x)
+        keys = self.toKeys(context)  # keys and values come from the encoder's latent space representation
+        values = self.toValues(context)
+
+        s = e // h  # dimensionality of the embedding space per head
+
+        queries = queries.view(b, t, h, s).transpose(1, 2).contiguous().view(b * h, t, s)
+        keys = keys.view(b, t_context, h, s).transpose(1, 2).contiguous().view(b * h, t_context, s)
+        values = values.view(b, t_context, h, s).transpose(1, 2).contiguous().view(b * h, t_context, s)
+
+        queries = queries / (e ** (1/4))
+        keys = keys / (e ** (1/4))
+
+        dot = torch.bmm(queries, keys.transpose(1, 2))  # (b * h, t, t_context)
+
+        dot = F.softmax(dot, dim=2)
+
+        out = torch.bmm(dot, values).view(b, h, t, s)
+
+        out = out.transpose(1, 2).contiguous().view(b, t, h * s)
+
+        return self.unifyHeads(out)
+
+
 class SimpleSelfAttention(nn.Module):
     """Simple self-attention layer with and weight normalisation."""
 
@@ -106,57 +152,62 @@ class SimpleSelfAttention(nn.Module):
 
 
 class EncoderBlock(nn.Module):
-    def __init__(self, k, heads, mask, p=0.1):
+    def __init__(self, emb, heads, mask, hidden=4, dropout=0.1):
         super().__init__()
 
-        self.attention = MHSelfAttention(k, heads, mask)
+        self.attention = MHSelfAttention(emb, heads, mask)
 
-        self.norm1 = nn.LayerNorm(k)
-        self.norm2 = nn.LayerNorm(k)
+        self.norm1 = nn.LayerNorm(emb)
+        self.norm2 = nn.LayerNorm(emb)
 
         self.ff = nn.Sequential(
-            nn.Linear(k, 4 * k),
+            nn.Linear(emb, hidden * emb),
             nn.ReLU(),
-            nn.Linear(4 * k, k))
+            nn.Linear(hidden * emb, emb))
         
-        self.dropout = nn.Dropout(p)
+        self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):  # TODO: check whether swapping dropout and norm is better
+    def forward(self, x):
         attended = self.attention(x)
         attended = self.dropout(attended)
-        
-        x = self.norm1(attended + x)
+        x = self.norm1(x + attended)
         
         fedforward = self.ff(x)
         fedforward = self.dropout(fedforward)
-
-        return self.norm2(fedforward + x)
+        x = self.norm2(x + fedforward)
+        
+        return x
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, k, heads):
+    def __init__(self, k, heads, hidden=4, dropout=0.1):
         super().__init__()
 
         self.maskedAttention = MHSelfAttention(k, heads, mask=True)
-        self.attention = MHSelfAttention(k, heads, mask=False)
+        self.crossAttention = MHCrossAttention(k, heads)
 
         self.norm1 = nn.LayerNorm(k)
         self.norm2 = nn.LayerNorm(k)
         self.norm3 = nn.LayerNorm(k)
 
-        self.ff = nn.Sequential(
-            nn.Linear(k, 4 * k),
-            nn.ReLU(),
-            # nn.GELU(),
-            nn.Linear(4 * k, k))
-    
-    def forward(self, x, encoder):
-        masked_attended = self.maskedAttention(x)
-        x = self.norm1(masked_attended + x)
+        self.dropout = nn.Dropout(dropout)
 
-        attended = self.attention(encoder(x))
-        x = self.norm2(attended + x)
+        self.ff = nn.Sequential(
+            nn.Linear(k, hidden * k),
+            nn.ReLU(),
+            nn.Linear(hidden * k, k))
+    
+    def forward(self, x, context):
+        masked_attended = self.maskedAttention(x)
+        masked_attended = self.dropout(masked_attended)
+        x = self.norm1(x + masked_attended)
+
+        cross_attended = self.crossAttention(x, context)
+        cross_attended = self.dropout(cross_attended)
+        x = self.norm2(x + cross_attended)
 
         fedforward = self.ff(x)
-        return self.norm3(fedforward + x)
+        fedforward = self.dropout(fedforward)
+        x = self.norm3(x + fedforward)
         
+        return x

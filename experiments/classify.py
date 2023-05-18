@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from bttransformer import utils, transformers
+from bttransformer import transformers, utils
 import fire
 import torch
 

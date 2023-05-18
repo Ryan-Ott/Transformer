@@ -16,7 +16,7 @@ class GrtTransformer(nn.Module):
 
         self.toProbs = nn.Linear(k, token_count)  # convert to probabilities over vocab
 
-        # TODO: add layer norm
+        self.norm = nn.LayerNorm(k)
 
     def forward(self, x):
         """
@@ -38,10 +38,13 @@ class GrtTransformer(nn.Module):
         
         # Pass through the transformer blocks
         x = self.encoder(x)  # (batch_size, seq_len, k)
+
+        # Normalize
+        x = self.norm(x)  # (batch_size, seq_len, k)
+        # TODO: check if normalising here is necessary because of layer norm in EncoderBlock
         
         # Convert to probabilities
         return self.toProbs(x)  # (batch_size, seq_len, token_count)
-
 
 
 class ClfTransformer(nn.Module):
@@ -65,9 +68,9 @@ class ClfTransformer(nn.Module):
         else:
             raise ValueError("Pooling must be set to 'max' or 'avg")
 
+        self.norm = nn.LayerNorm(k)
+        
         self.linear = nn.Linear(k, n_classes, bias=True)
-
-        # TODO: add layer norm
     
     def forward(self, x):  # x: (batch_size, seq_len)
         tokens = self.tok_embedding(x)
@@ -79,6 +82,8 @@ class ClfTransformer(nn.Module):
         x = self.encoder(x)
 
         x = self.pooling(x.transpose(1, 2)).squeeze(2)  # (batch_size, k)
+
+        x = self.norm(x)
 
         return self.linear(x)
 

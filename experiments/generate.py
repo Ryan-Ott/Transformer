@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch
 import torch.optim.lr_scheduler as lr_scheduler
 import tqdm
-import transformers
-import utils
+
+from bttransformer import transformers, utils
 
 NUM_TOKENS = 256
 

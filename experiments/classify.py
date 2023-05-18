@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
-import data_rnn
+from bttransformer import utils, transformers
 import fire
-import transformers
 import torch
-import utils
 
 
 def main(model, e=3, a=1e-3, k=512, h=4, p="avg", b="tokens", d=4, f=False, v=False, note="-"):
@@ -29,7 +27,7 @@ def main(model, e=3, a=1e-3, k=512, h=4, p="avg", b="tokens", d=4, f=False, v=Fa
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Load the IMDb dataset
-    (x_train, y_train), (x_val, y_val), (i2w, w2i), n_classes = data_rnn.load_imdb(final=final)
+    (x_train, y_train), (x_val, y_val), (i2w, w2i), n_classes = utils.load_imdb(final=final)
     PAD = w2i['.pad']  # Index of padding token (its 0)
 
     # Sort the training data by length (shortest to longest)

@@ -1,8 +1,6 @@
 import torch
 from torch import nn
-from torch.nn import functional as F
-import modules
-import utils
+from . import utils, modules
 
 
 class GrtTransformer(nn.Module):
@@ -17,6 +15,8 @@ class GrtTransformer(nn.Module):
         self.encoder = nn.Sequential(*blocks)
 
         self.toProbs = nn.Linear(k, token_count)  # convert to probabilities over vocab
+
+        # TODO: add layer norm
 
     def forward(self, x):
         """
@@ -66,6 +66,8 @@ class ClfTransformer(nn.Module):
             raise ValueError("Pooling must be set to 'max' or 'avg")
 
         self.linear = nn.Linear(k, n_classes, bias=True)
+
+        # TODO: add layer norm
     
     def forward(self, x):  # x: (batch_size, seq_len)
         tokens = self.tok_embedding(x)
@@ -73,7 +75,6 @@ class ClfTransformer(nn.Module):
         positions = self.pos_encoding[:tokens.size(1), :].unsqueeze(0).to(tokens.device)
 
         x = tokens + positions
-        x = self.dropout(x)
 
         x = self.encoder(x)
 

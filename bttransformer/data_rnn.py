@@ -5,18 +5,12 @@ import pickle
 import random
 import re
 
-IMDB_URL = 'http://dlvu.github.io/data/imdb.{}.pkl.gz'
-IMDB_FILE = 'imdb.{}.pkl.gz'
-
-PAD, START, END, UNK = '.pad', '.start', '.end', '.unk'
-
 
 def load_imdb(final=False, val=5000, seed=0, voc=None, char=False):
-
     cst = 'char' if char else 'word'
 
-    imdb_url = IMDB_URL.format(cst)
-    imdb_file = IMDB_FILE.format(cst)
+    imdb_url = 'http://dlvu.github.io/data/imdb.{}.pkl.gz'.format(cst)
+    imdb_file = 'imdb.{}.pkl.gz'.format(cst)
 
     if not os.path.exists(imdb_file):
         wget.download(imdb_url)

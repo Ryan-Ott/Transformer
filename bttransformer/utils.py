@@ -1,8 +1,67 @@
+import gzip
 import math
+import os
+import pickle
+import random
 import time
+import wget
+
+import numpy as np
 import torch
-from torch import nn
+import torch.distributions as dist
+import torch.nn.functional as F
 import torch.optim.lr_scheduler as lr_scheduler
+from torch import nn
+
+
+def load_imdb(final=False, val=5000, seed=0, voc=None, char=False):
+    cst = 'char' if char else 'word'
+
+    imdb_url = 'http://dlvu.github.io/data/imdb.{}.pkl.gz'.format(cst)
+    imdb_file = 'imdb.{}.pkl.gz'.format(cst)
+
+    if not os.path.exists(imdb_file):
+        wget.download(imdb_url)
+
+    with gzip.open(imdb_file) as file:
+        sequences, labels, i2w, w2i = pickle.load(file)
+
+    if voc is not None and voc < len(i2w):
+        nw_sequences = {}
+
+        i2w = i2w[:voc]
+        w2i = {w: i for i, w in enumerate(i2w)}
+
+        mx, unk = voc, w2i['.unk']
+        for key, seqs in sequences.items():
+            nw_sequences[key] = []
+            for seq in seqs:
+                seq = [s if s < mx else unk for s in seq]
+                nw_sequences[key].append(seq)
+
+        sequences = nw_sequences
+
+    if final:
+        return (sequences['train'], labels['train']), (sequences['test'], labels['test']), (i2w, w2i), 2
+
+    # Make a validation split
+    random.seed(seed)
+
+    x_train, y_train = [], []
+    x_val, y_val = [], []
+
+    val_ind = set(random.sample(range(len(sequences['train'])), k=val))
+    for i, (s, l) in enumerate(zip(sequences['train'], labels['train'])):
+        if i in val_ind:
+            x_val.append(s)
+            y_val.append(l)
+        else:
+            x_train.append(s)
+            y_train.append(l)
+
+    return (x_train, y_train), \
+           (x_val, y_val), \
+           (i2w, w2i), 2
 
 
 def pos_encode(k, max_len=10000):
@@ -19,6 +78,106 @@ def pos_encode(k, max_len=10000):
 
 def sort(x, y):
     return zip(*sorted(zip(x, y), key=lambda x: len(x[0])))
+
+
+def sample(lnprobs, temperature=1.0):
+    """
+    Sample an element from a categorical distribution
+    :param lnprobs: Outcome log-probabilities
+    :param temperature: Sampling temperature. 1.0 follows the given distribution,
+        0.0 returns the maximum probability element.
+    :return: The index of the sampled element.
+    """
+    if temperature == 0.0:
+        return lnprobs.argmax()
+
+    p = F.softmax(lnprobs / temperature, dim=0)
+    cd = dist.Categorical(p)  # categorical distribution
+
+    return cd.sample()
+
+
+def enwik8(path, n_train=int(90e6), n_valid=int(5e6), n_test=int(5e6)):
+    """
+    Load the enwik8 dataset from the Hutter challenge.
+    Adapted from https://github.com/openai/blocksparse/blob/master/examples/transformer/enwik8.py
+    """
+    with gzip.open(path) if path.endswith('.gz') else open(path, 'rb') as file:
+        X = np.frombuffer(file.read(n_train + n_valid + n_test), dtype=np.uint8)
+        trX, vaX, teX = np.split(X, [n_train, n_train + n_valid])
+        return torch.from_numpy(trX), torch.from_numpy(vaX), torch.from_numpy(teX)
+
+
+def sample_batch(data, length, batch_size):  # TODO: read more into this
+    """
+    Takes the data (a single sequence of tokens) and slices out a batch of subsequences to provide as input to the model.
+
+    For each input instance, it also slices out the sequence that is shofted one position to the right, to provide as a
+    target for the model.
+
+    :param data: The (training) data. A single vector of tokens represented by integers
+    :param length: The length of the subsequences in the batch.
+    :param batch_size: The number of subsequences in the batch
+    :return: A pair (input, target) of minteger matrices representing the input and target for the model.
+    """
+
+    # Sample the starting indices of the sequences to slice out.
+    starts = torch.randint(size=(batch_size,), low=0, high=data.size(0) - length - 1)
+
+    # Slice out the input sequences
+    seqs_inputs  = [data[start:start + length] for start in starts]
+    # -- the start index is the one we just sampled, and the end is exactly 'lentgh' positions after that.
+    seqs_target = [data[start + 1:start + length + 1] for start in starts]
+    # -- The target is the same sequence as input, except one character ahead (we are asking the model to predict the
+    #    next character at each position)
+
+    # We now have two lists of torch vectors, which we can concatenate into matrices of batch_size-by-length
+    inputs = torch.cat([s[None, :] for s in seqs_inputs], dim=0).to(torch.long)
+    target = torch.cat([s[None, :] for s in seqs_target], dim=0).to(torch.long)
+    # -- Note that we add a singleton dimenson to each vector, s[None.,:], and then concatenate along that dimension.
+
+    return inputs, target
+
+
+def sample_sequence(model, seed, max_context, length=600, temperature=0.5, verbose=False):  # TODO: read more into this
+    """
+    Sequentially samples a sequence from the model, token by token.
+
+    :param model:
+    :param seed: The sequence to start with.
+    :param length: The total number of characters to sample.
+    :param temperature: The sampling temperature.
+    :param verbose: If true, the sampled sequence is also printed as it is sampled.
+
+    :return: The sampled sequence, including the seed.
+    """
+
+    sequence = seed.detach().clone()
+
+    if verbose: # Print the seed, surrounded by square brackets
+        print('[', end='', flush=True)
+        for c in seed:
+            print(str(chr(c)), end='', flush=True)
+        print(']', end='', flush=True)
+
+    for _ in range(length):
+
+        # Input is the tail end of the sampled sequence (as many tokens as the model can handle)
+        input = sequence[-max_context:]
+
+        # Run the current input through the model
+        output = model(input[None, :])
+
+        # Sample the next token from the probabilitys at the last position of the output.
+        c = sample(output[0, -1, :], temperature)
+
+        if verbose:
+            print(str(chr(max(32, c))), end='', flush=True) # type: ignore # chr() expects an int, not a tensor
+
+        sequence = torch.cat([sequence, c[None]], dim=0) # Append the sampled token to the sequence
+
+    print()
+    return seed
 
 
 def batchify(device, batch_by, x_train, y_train, x_val, y_val, PAD):
@@ -74,7 +233,7 @@ def batch_by_instances(device, sequences, labels, batch_size=32, pad_token=0):
     return batches_x, batches_y
 
 
-def batch_by_tokens(device, sequences, labels, max_tokens=2**14, pad_token=0):
+def batch_by_tokens(device, sequences, labels, max_tokens=2**15, pad_token=0):
     """Create batches of a maximum number of tokens so that each batch takes roughly the same amount of memory. Pad all instances within a batch to be the same length.
 
     Args:

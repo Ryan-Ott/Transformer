@@ -5,20 +5,32 @@ from . import utils, modules
 
 class SumTransformer(nn.Module):
     """Text summarization transformer."""
-    def __init__(self, emb_dim, heads, token_count, seq_len, enc_hidden, enc_dropout, enc_depth, dec_hidden, dec_dropout, dec_depth):
+    def __init__(self, emb_dim, heads, vocab_size, seq_len, enc_hidden, enc_dropout, enc_depth, dec_hidden, dec_dropout, dec_depth):
+        """
+        :param emb_dim: embedding dimension
+        :param heads: number of attention heads
+        :param token_count: number of tokens in the vocabulary
+        :param seq_len: length of the input sequence
+        :param enc_hidden: number of hidden units in the encoder
+        :param enc_dropout: dropout rate in the encoder
+        :param enc_depth: number of encoder blocks
+        :param dec_hidden: number of hidden units in the decoder
+        :param dec_dropout: dropout rate in the decoder
+        :param dec_depth: number of decoder blocks
+        """
         # TODO - q: should there be a separate number of heads in the encoder and decoder?
         # TODO - q: add layernorm here too?
         # TODO: do positional encoding instead of embedding
 
         super().__init__()
 
-        self.token_embedding = nn.Embedding(num_embeddings=token_count, embedding_dim=emb_dim)
+        self.token_embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=emb_dim)
         self.pos_embedding = nn.Embedding(num_embeddings=seq_len, embedding_dim=emb_dim)
 
         self.encoder = nn.Sequential(*[modules.EncoderBlock(emb_dim, heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)])
         self.decoder = nn.Sequential(*[modules.DecoderBlock(emb_dim, heads, dec_hidden, dec_dropout) for _ in range(dec_depth)])
 
-        self.toProbs = nn.Linear(emb_dim, token_count)  # convert to probabilities over vocab
+        self.toProbs = nn.Linear(emb_dim, vocab_size)  # convert to probabilities over vocab
 
 
     def forward(self, source, target):

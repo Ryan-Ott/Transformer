@@ -160,7 +160,7 @@ class EncoderBlock(nn.Module):
         self.norm1 = nn.LayerNorm(emb)
         self.norm2 = nn.LayerNorm(emb)
 
-        self.ff = nn.Sequential(
+        self.ff = nn.Sequential(  # TODO: possibly replace with GLU
             nn.Linear(emb, hidden * emb),
             nn.ReLU(),
             nn.Linear(hidden * emb, emb))

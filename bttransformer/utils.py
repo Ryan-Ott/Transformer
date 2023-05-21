@@ -3,10 +3,13 @@ import math
 import os
 import pickle
 import random
+import tarfile
 import time
+from typing import List, Tuple
 import wget
 
 import numpy as np
+from tokenizers import Tokenizer
 import torch
 import torch.distributions as dist
 import torch.nn.functional as F
@@ -178,6 +181,40 @@ def sample_sequence(model, seed, max_context, length=600, temperature=0.5, verbo
 
     print()
     return seed
+
+
+def preprocess(x: List[str], y: List[str], tokenizer: Tokenizer, batch_size: int, device: torch.device) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Create batches of tokenized and padded documents and summaries.
+
+        Args:
+            x (List[str]): List of documents.
+            y (List[str]): List of summaries.
+            tokenizer (Tokenizer): Tokenizer to use.
+            batch_size (int): Batch size.
+            device (torch.device): Device to save tensors on.
+            
+        Returns:
+            List[Tuple[torch.Tensor, torch.Tensor]]: List of batches of tokenized and padded documents and summaries.
+        """
+        batches = []
+        for i in range(0, len(x), batch_size):
+            # Get the batch
+            x_batch = x[i:i+batch_size]
+            y_batch = y[i:i+batch_size]
+
+            # Tokenize the batch
+            tokenizer.enable_padding(pad_id=tokenizer.token_to_id('[PAD]'), pad_token='[PAD]')
+            x_batch = [i.ids for i in tokenizer.encode_batch(x_batch)]
+            y_batch = [i.ids for i in tokenizer.encode_batch(y_batch)]
+
+            # Convert to tensors and save on device
+            x_batch = torch.tensor(x_batch, dtype=torch.long, device=device)
+            y_batch = torch.tensor(y_batch, dtype=torch.long, device=device)
+
+            batches.append((x_batch, y_batch))
+
+        return batches
 
 
 def batchify(device, batch_by, x_train, y_train, x_val, y_val, PAD):

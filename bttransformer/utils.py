@@ -3,7 +3,6 @@ import math
 import os
 import pickle
 import random
-import tarfile
 import time
 from typing import List, Tuple
 import wget
@@ -81,6 +80,16 @@ def pos_encode(k, max_len=10000):
 
 def sort(x, y):
     return zip(*sorted(zip(x, y), key=lambda x: len(x[0])))
+
+
+def filter(x, y):
+    new_x, new_y = [], []
+    for x_, y_ in zip(x, y):
+        if len(x_) >= 3*len(y_) and len(y_) >= 100:
+            new_x.append(x_)
+            new_y.append(y_)
+
+    return new_x, new_y
 
 
 def sample(lnprobs, temperature=1.0):

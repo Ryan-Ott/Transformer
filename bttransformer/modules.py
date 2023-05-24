@@ -192,7 +192,7 @@ class DecoderBlock(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-        self.ff = nn.Sequential(
+        self.ff = nn.Sequential(  # TODO: possibly replace with GLU
             nn.Linear(k, hidden * k),
             nn.ReLU(),
             nn.Linear(hidden * k, k))

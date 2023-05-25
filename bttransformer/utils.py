@@ -82,10 +82,10 @@ def sort(x, y):
     return zip(*sorted(zip(x, y), key=lambda x: len(x[0])))
 
 
-def filter(x, y):
+def filter(x, y, min=50):
     new_x, new_y = [], []
     for x_, y_ in zip(x, y):
-        if len(x_) >= 3*len(y_) and len(y_) >= 100:
+        if len(x_) >= min and len(y_) >= min:
             new_x.append(x_)
             new_y.append(y_)
 
@@ -213,7 +213,7 @@ def preprocess(x: List[str], y: List[str], tokenizer: Tokenizer, batch_size: int
             y_batch = y[i:i+batch_size]
 
             # Tokenize the batch
-            tokenizer.enable_padding(pad_id=tokenizer.token_to_id('[PAD]'), pad_token='[PAD]')
+            tokenizer.enable_padding(pad_id=tokenizer.token_to_id('[PAD]'), pad_token='[PAD]')  # Pad to longest sequence in batch
             x_batch = [i.ids for i in tokenizer.encode_batch(x_batch)]
             y_batch = [i.ids for i in tokenizer.encode_batch(y_batch)]
 

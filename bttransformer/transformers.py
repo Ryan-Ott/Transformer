@@ -11,8 +11,11 @@ class SumTransformer(nn.Module):
         self.token_embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=emb_dim)
         self.pos_embedding = nn.Embedding(num_embeddings=max_len, embedding_dim=emb_dim)
 
-        self.encoder = nn.Sequential(*[modules.EncoderBlock(emb_dim, enc_heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)])
-        self.decoder = nn.Sequential(*[modules.DecoderBlock(emb_dim, dec_heads, dec_hidden, dec_dropout) for _ in range(dec_depth)])
+        self.encoder = [modules.EncoderBlock(emb_dim, enc_heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)]
+        self.decoder = [modules.DecoderBlock(emb_dim, dec_heads, dec_hidden, dec_dropout) for _ in range(dec_depth)]
+
+        # self.encoder = nn.Sequential(*[modules.EncoderBlock(emb_dim, enc_heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)])
+        # self.decoder = nn.Sequential(*[modules.DecoderBlock(emb_dim, dec_heads, dec_hidden, dec_dropout) for _ in range(dec_depth)])  # ! nn.Sequential() doesn't work here because more than just the previous layer's output is needed as input to a layer
 
         self.toProbs = nn.Linear(emb_dim, vocab_size)  # convert to probabilities over vocab
 
@@ -28,10 +31,13 @@ class SumTransformer(nn.Module):
         positions_target = self.pos_embedding(torch.arange(t_t, device=target.device))[None, :, :].expand(b, t_t, k)
 
         x = tokens_source + positions_source
-        context = self.encoder(x)
+        for layer in self.encoder:
+            x = layer(x)
+        context = x
 
         y = tokens_target + positions_target
-        y = self.decoder(y, context)
+        for layer in self.decoder:
+            y = layer(y, context)
 
         return self.toProbs(y)
 

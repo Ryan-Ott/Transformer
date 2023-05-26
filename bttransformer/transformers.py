@@ -13,8 +13,10 @@ class SumTransformer(nn.Module):
         self.token_embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=emb_dim).to(device)
         self.pos_embedding = nn.Embedding(num_embeddings=max_len, embedding_dim=emb_dim).to(device)
 
-        self.encoder = [modules.EncoderBlock(emb_dim, enc_heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)].to(device)
-        self.decoder = [modules.DecoderBlock(emb_dim, dec_heads, dec_hidden, dec_dropout) for _ in range(dec_depth)].to(device)
+        self.encoder = [modules.EncoderBlock(emb_dim, enc_heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)]
+        for module in self.encoder: module.to(device)
+        self.decoder = [modules.DecoderBlock(emb_dim, dec_heads, dec_hidden, dec_dropout) for _ in range(dec_depth)]
+        for module in self.decoder: module.to(device)
 
         self.toProbs = nn.Linear(emb_dim, vocab_size).to(device)  # convert to probabilities over vocab
 

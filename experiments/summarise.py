@@ -90,7 +90,6 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 
-
 def split_data(dataset, train_split, val_split):
     # Shuffle the dataset
     dataset = dataset.shuffle()
@@ -215,7 +214,6 @@ def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device
             plt.title(name)
             plt.savefig(f'graphs/{name.replace(".", "_")}.png')
             plt.close()
-
 
 
 def test(model, test_loader, loss_fn, device):
@@ -366,6 +364,27 @@ def main(
     scheduler = lr_schedulers[sched]
 
     early_stopping = EarlyStopping(patience=3, path='checkpoint.pt')
+
+    # Print all the hyperparameters
+    if v:
+        print("\nHyperparameters:")
+        print(f"Vocab size: {vocab_size}")
+        print(f"Embedding size: {emb}")
+        print(f"Encoder heads: {eheads}")
+        print(f"Encoder hidden size: {ehidden}")
+        print(f"Encoder dropout: {edrop}")
+        print(f"Encoder depth: {edepth}")
+        print(f"Decoder heads: {dheads}")
+        print(f"Decoder hidden size: {dhidden}")
+        print(f"Decoder dropout: {ddrop}")
+        print(f"Decoder depth: {ddepth}")
+        print(f"Batch size: {bsize}")
+        print(f"Learning rate: {alpha}")
+        print(f"Scheduler: {sched}")
+        print(f"Epochs: {epochs}")
+        print(f"Clip: {CLIP}")
+        print(f"Early stopping: {early_stopping.patience}")
+        print("--------------------------------------------------")
 
     train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device, epochs, CLIP, early_stopping)
 

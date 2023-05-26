@@ -21,14 +21,15 @@ class SumTransformer(nn.Module):
 
 
     def forward(self, source, target):
-        tokens_source = self.token_embedding(source)
-        tokens_target = self.token_embedding(target)
+        device = source.device
+        tokens_source = self.token_embedding(source.to(device))
+        tokens_target = self.token_embedding(target.to(device))
 
         b, t_s, k = tokens_source.size()
         _, t_t, _ = tokens_target.size()
 
-        positions_source = self.pos_embedding(torch.arange(t_s, device=source.device))[None, :, :].expand(b, t_s, k)
-        positions_target = self.pos_embedding(torch.arange(t_t, device=target.device))[None, :, :].expand(b, t_t, k)
+        positions_source = self.pos_embedding(torch.arange(t_s, device=device))[None, :, :].expand(b, t_s, k)
+        positions_target = self.pos_embedding(torch.arange(t_t, device=device))[None, :, :].expand(b, t_t, k)
 
         x = tokens_source + positions_source
         for layer in self.encoder:

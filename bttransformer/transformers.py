@@ -5,11 +5,11 @@ from . import utils, modules
 
 class SumTransformer(nn.Module):
     """Text summarization transformer."""
-    def __init__(self, emb_dim, vocab_size, max_len, enc_heads, enc_hidden, enc_dropout, enc_depth, dec_heads, dec_hidden, dec_dropout, dec_depth):
+    def __init__(self, device, emb_dim, vocab_size, max_len, enc_heads, enc_hidden, enc_dropout, enc_depth, dec_heads, dec_hidden, dec_dropout, dec_depth):
         super().__init__()
 
-        self.token_embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=emb_dim)
-        self.pos_embedding = nn.Embedding(num_embeddings=max_len, embedding_dim=emb_dim)
+        self.token_embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=emb_dim).to(device)
+        self.pos_embedding = nn.Embedding(num_embeddings=max_len, embedding_dim=emb_dim).to(device)
 
         self.encoder = [modules.EncoderBlock(emb_dim, enc_heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)]
         self.decoder = [modules.DecoderBlock(emb_dim, dec_heads, dec_hidden, dec_dropout) for _ in range(dec_depth)]

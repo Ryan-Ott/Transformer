@@ -344,7 +344,8 @@ def main(
     
     # Create the model
     print("\nCreating the model...")
-    model = transformers.SumTransformer(emb, tokenizer.get_vocab_size(), max_doc_len, eheads, ehidden, edrop, edepth, dheads, dhidden, ddrop, ddepth).to(device)
+    model = transformers.SumTransformer(device, emb, tokenizer.get_vocab_size(), max_doc_len, eheads, ehidden, edrop, edepth, dheads, dhidden, ddrop, ddepth).to(device)
+    model.to(device)
 
     # Define the loss function
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=tokenizer.token_to_id("[PAD]"))

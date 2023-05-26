@@ -171,7 +171,7 @@ def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device
                 docs = docs.to(device)
                 sums = sums.to(device)
                 
-                output = model(docs)
+                output = model(docs, sums)
                 loss = loss_fn(output.view(-1, output.size(-1)), sums.view(-1))
                 val_loss += loss.item()
 
@@ -204,7 +204,7 @@ def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device
     plt.close()
 
     # Load the best model
-    model.load_state_dict(torch.load('checkpoint.pt'))
+    model.load_state_dict(torch.load('checkpoint.pt', map_location=device))
 
     # Plot weights and biases
     for name, param in model.named_parameters():
@@ -224,7 +224,7 @@ def test(model, test_loader, loss_fn, device):
             docs = docs.to(device)
             sums = sums.to(device)
 
-            output = model(docs)
+            output = model(docs)  # !! Change this
 
             loss = loss_fn(output.view(-1, output.size(-1)), sums.view(-1))
             total_loss += loss.item()
@@ -312,14 +312,14 @@ def main(
     train_sampler = BucketSampler(train_dataset, train_lens, bsize)
     val_sampler = BucketSampler(val_dataset, val_lens, bsize)
     test_sampler = BucketSampler(test_dataset, test_lens, bsize)
-    
+        
     def collate_fn(batch):
         # Unzipping the batch
         docs, sums = zip(*batch)
 
         # Convert lists to tensors
-        docs = [torch.LongTensor(doc) for doc in docs]
-        sums = [torch.LongTensor(sum) for sum in sums]
+        docs = [torch.LongTensor(doc).to(device) for doc in docs]
+        sums = [torch.LongTensor(sum).to(device) for sum in sums]
         
         # Pad sequences
         docs = pad_sequence(docs, batch_first=True, padding_value=tokenizer.token_to_id("[PAD]"))
@@ -345,7 +345,6 @@ def main(
     # Create the model
     print("\nCreating the model...")
     model = transformers.SumTransformer(device, emb, tokenizer.get_vocab_size(), max_doc_len, eheads, ehidden, edrop, edepth, dheads, dhidden, ddrop, ddepth).to(device)
-    model.to(device)
 
     # Define the loss function
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=tokenizer.token_to_id("[PAD]"))

@@ -8,28 +8,26 @@ class SumTransformer(nn.Module):
     def __init__(self, device, emb_dim, vocab_size, max_len, enc_heads, enc_hidden, enc_dropout, enc_depth, dec_heads, dec_hidden, dec_dropout, dec_depth):
         super().__init__()
 
+        self.device = device
+
         self.token_embedding = nn.Embedding(num_embeddings=vocab_size, embedding_dim=emb_dim).to(device)
         self.pos_embedding = nn.Embedding(num_embeddings=max_len, embedding_dim=emb_dim).to(device)
 
-        self.encoder = [modules.EncoderBlock(emb_dim, enc_heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)]
-        self.decoder = [modules.DecoderBlock(emb_dim, dec_heads, dec_hidden, dec_dropout) for _ in range(dec_depth)]
+        self.encoder = [modules.EncoderBlock(emb_dim, enc_heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)].to(device)
+        self.decoder = [modules.DecoderBlock(emb_dim, dec_heads, dec_hidden, dec_dropout) for _ in range(dec_depth)].to(device)
 
-        # self.encoder = nn.Sequential(*[modules.EncoderBlock(emb_dim, enc_heads, mask=False, hidden=enc_hidden, dropout=enc_dropout) for _ in range(enc_depth)])
-        # self.decoder = nn.Sequential(*[modules.DecoderBlock(emb_dim, dec_heads, dec_hidden, dec_dropout) for _ in range(dec_depth)])  # ! nn.Sequential() doesn't work here because more than just the previous layer's output is needed as input to a layer
-
-        self.toProbs = nn.Linear(emb_dim, vocab_size)  # convert to probabilities over vocab
+        self.toProbs = nn.Linear(emb_dim, vocab_size).to(device)  # convert to probabilities over vocab
 
 
     def forward(self, source, target):
-        device = source.device
-        tokens_source = self.token_embedding(source.to(device))
-        tokens_target = self.token_embedding(target.to(device))
+        tokens_source = self.token_embedding(source.to(self.device))
+        tokens_target = self.token_embedding(target.to(self.device))
 
         b, t_s, k = tokens_source.size()
         _, t_t, _ = tokens_target.size()
 
-        positions_source = self.pos_embedding(torch.arange(t_s, device=device))[None, :, :].expand(b, t_s, k)
-        positions_target = self.pos_embedding(torch.arange(t_t, device=device))[None, :, :].expand(b, t_t, k)
+        positions_source = self.pos_embedding(torch.arange(t_s, device=self.device))[None, :, :].expand(b, t_s, k)
+        positions_target = self.pos_embedding(torch.arange(t_t, device=self.device))[None, :, :].expand(b, t_t, k)
 
         x = tokens_source + positions_source
         for layer in self.encoder:
@@ -41,6 +39,7 @@ class SumTransformer(nn.Module):
             y = layer(y, context)
 
         return self.toProbs(y)
+
 
 
 class GrtTransformer(nn.Module):

@@ -52,7 +52,7 @@ class MHSelfAttention(nn.Module):
 
         if self.mask:
             # Create a mask to remove the upper half of the dot matrix, excluding the diagonal
-            mask = torch.triu(torch.ones(t, t), diagonal=1).to(dot.device)
+            mask = torch.triu(torch.ones(t, t, device=dot.device), diagonal=1)
             # Set the masked positions to float('-inf') to minimize their impact on the softmax operation
             mask = mask.masked_fill(mask == 1, float('-inf'))
             # Add the mask to the dot product matrix

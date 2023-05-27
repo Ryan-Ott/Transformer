@@ -12,6 +12,7 @@ from tokenizers import Tokenizer
 from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.models import WordPiece
 from tokenizers.trainers import WordPieceTrainer
+from torch.cuda.amp import autocast, GradScaler
 from torch.optim import lr_scheduler
 from torch.nn.utils import clip_grad_norm_
 from torch.nn.utils.rnn import pad_sequence
@@ -107,13 +108,15 @@ def split_data(dataset, train_split, val_split):
     return train_dataset, val_dataset, test_dataset
 
 
-def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device, epochs, clip, early_stopping):
+def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device, epochs, clip, early_stopping, accumulation_steps=8):
     # Ensure 'graphs' directory exists
     if not os.path.exists('graphs'):
         os.makedirs('graphs')
 
     train_losses = []
     val_losses = []
+
+    scaler = GradScaler()  # for mixed precision training
 
     for epoch in range(epochs):
         model.train()  # Set the model to training mode
@@ -122,22 +125,21 @@ def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device
         # For storing norms
         l2_norms = []
 
+        optimizer.zero_grad()  # reset gradients at the beginning of each epoch
+
         for batch_idx, (docs, sums) in enumerate(train_loader):
             docs = docs.to(device)
             sums = sums.to(device)
             
             # Forward pass
-            output = model(docs, sums)
+            with autocast():  # enable mixed precision training
+                output = model(docs, sums)
+                loss = loss_fn(output.view(-1, output.size(-1)), sums.view(-1))
 
-            # Clear the gradients
-            optimizer.zero_grad()
+            loss = loss / accumulation_steps  # normalize the loss
 
-            # Calculate the loss
-            loss = loss_fn(output.view(-1, output.size(-1)), sums.view(-1))
-            running_loss += loss.item()
-
-            # Backward pass
-            loss.backward()
+            # Backward pass and optimization
+            scaler.scale(loss).backward()  # scale the loss to prevent underflow/overflow
 
             # Compute L2 norm of gradients and store
             l2_norm = 0.0
@@ -148,13 +150,19 @@ def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device
             l2_norms.append(l2_norm ** 0.5)
 
             # Gradient clipping
+            # Note: we don't need to scale the gradients here because scaler.step() will do it for us
             clip_grad_norm_(model.parameters(), clip)
 
             # Update weights
-            optimizer.step()
+            if (batch_idx + 1) % accumulation_steps == 0:  # update weights every accumulation_steps
+                scaler.step(optimizer)  # unscale the gradients before performing optimizer.step()
+                scaler.update()
+                optimizer.zero_grad()  # reset gradients
 
             # Update learning rate
             scheduler.step()
+
+            running_loss += loss.item() * accumulation_steps  # scale the loss back up for reporting
 
             if batch_idx % 100 == 0:
                 print(f"Epoch {epoch} batch {batch_idx} loss {loss.item()}")
@@ -172,8 +180,10 @@ def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device
                 docs = docs.to(device)
                 sums = sums.to(device)
                 
-                output = model(docs, sums)
-                loss = loss_fn(output.view(-1, output.size(-1)), sums.view(-1))
+                with autocast():  # enable mixed precision training
+                    output = model(docs, sums)
+                    loss = loss_fn(output.view(-1, output.size(-1)), sums.view(-1))
+
                 val_loss += loss.item()
 
         val_loss /= len(val_loader)
@@ -197,7 +207,7 @@ def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device
 
     # Plot Losses
     plt.figure()
-    plt.plot(train_losses, label='Train Loss')
+    plt.plot(train_losses, label='Training Loss')
     plt.plot(val_losses, label='Validation Loss')
     plt.title('Loss curves')
     plt.legend()

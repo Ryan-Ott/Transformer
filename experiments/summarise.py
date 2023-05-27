@@ -8,7 +8,6 @@ import torch
 from bttransformer import transformers
 
 from datasets import concatenate_datasets, load_dataset
-import matplotlib.pyplot as plt
 from tokenizers import Tokenizer
 from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.models import WordPiece
@@ -18,6 +17,8 @@ from torch.nn.utils import clip_grad_norm_
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 
+import gc
+import matplotlib.pyplot as plt
 
 MIN_LENGTH = 15  # Minimum number of tokens in a sequence
 CLIP = 1  # Gradient clipping
@@ -238,6 +239,8 @@ def main(
     epochs=3, alpha=1e-4, bsize=32, emb=128, vocab_size=2**14, sched="onecycle", final=False, v=False,
     eheads=4, ehidden=4, edrop=0.1, edepth=2,
     dheads=4, dhidden=2, ddrop=0.1, ddepth=4):
+
+
     torch.set_printoptions(threshold=sys.maxsize)
     
     # Load the best available device
@@ -393,4 +396,6 @@ def main(
 
 
 if __name__ == '__main__':
+    gc.collect()
+    torch.cuda.empty_cache()
     fire.Fire(main)

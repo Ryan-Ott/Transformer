@@ -4,6 +4,8 @@ import random
 import sys
 import fire
 import torch
+import gc
+import matplotlib.pyplot as plt
 
 from bttransformer import transformers
 
@@ -18,8 +20,6 @@ from torch.nn.utils import clip_grad_norm_
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 
-import gc
-import matplotlib.pyplot as plt
 
 MIN_LENGTH = 15  # Minimum number of tokens in a sequence
 CLIP = 1  # Gradient clipping
@@ -37,12 +37,11 @@ class TextDataset(Dataset):
 
 
 class BucketSampler(torch.utils.data.Sampler):
-    def __init__(self, data_source, sort_lens, batch_size, shuffle=True, drop_last=False):
+    def __init__(self, data_source, sort_lens, batch_size, shuffle=True):
         super().__init__(data_source)
         self.sort_lens = sort_lens
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.drop_last = drop_last
 
     def __iter__(self):
         indices = list(range(len(self.sort_lens)))
@@ -53,20 +52,18 @@ class BucketSampler(torch.utils.data.Sampler):
         return iter(batches)
 
     def __len__(self):
-        if self.drop_last:
-            return len(self.sort_lens) // self.batch_size
-        else:
-            return (len(self.sort_lens) + self.batch_size - 1) // self.batch_size
+        return (len(self.sort_lens) + self.batch_size - 1) // self.batch_size
 
 
 class EarlyStopping:
-    def __init__(self, patience=3, path='./checkpoints/checkpoint.pt', delta=0):
+    def __init__(self, patience=5, path='./checkpoints/checkpoint.pt', min_delta=0):
         self.patience = patience
         self.path = path
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-        self.delta = delta
+        self.min_delta = min_delta
+        self.min_val_loss = float('inf')
 
     def __call__(self, val_loss, model):
 
@@ -75,7 +72,7 @@ class EarlyStopping:
         if self.best_score is None:
             self.best_score = score
             self.save_checkpoint(val_loss, model)
-        elif score < self.best_score + self.delta:
+        elif score < self.best_score + self.min_delta:
             self.counter += 1
             print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
             if self.counter >= self.patience:
@@ -87,9 +84,9 @@ class EarlyStopping:
 
     def save_checkpoint(self, val_loss, model):
         '''Saves model when validation loss decrease.'''
-        print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+        print(f'Validation loss decreased ({self.min_val_loss:.6f} --> {val_loss:.6f}).  Saving model ...')
         torch.save(model.state_dict(), self.path)
-        self.val_loss_min = val_loss
+        self.min_val_loss = val_loss
 
 
 def split_data(dataset, train_split, val_split):
@@ -99,7 +96,6 @@ def split_data(dataset, train_split, val_split):
     # Split the dataset
     train_size = int(len(dataset) * train_split)
     val_size = int(len(dataset) * val_split)
-    test_size = len(dataset) - train_size - val_size
 
     train_dataset = dataset[:train_size]
     val_dataset = dataset[train_size:train_size+val_size]

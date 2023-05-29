@@ -160,7 +160,7 @@ def train(model, train_loader, val_loader, loss_fn, optimizer, scheduler, device
 
             running_loss += loss.item() * accumulation_steps  # scale the loss back up for reporting
 
-            if batch_idx % 100 == 0:
+            if batch_idx % 1000 == 0:
                 print(f"Epoch {epoch} batch {batch_idx} loss {loss.item()}")
 
         running_loss /= len(train_loader)
